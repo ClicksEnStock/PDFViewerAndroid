@@ -47,6 +47,7 @@ public class CRunPDFViewer extends CRunExtension
 	private HashMap<String, String> permissionsApi23;
 	private boolean enabled_perms;
 	private String mLastError;
+	private boolean mDebugLoggingEnabled;
 	
 	public CRunPDFViewer() {
 		expRet = new CValue(0);
@@ -67,11 +68,20 @@ public class CRunPDFViewer extends CRunExtension
 		mCurrentImageNumber = -1;
 		mLastError = "";
 		
+		int editorWidth = file.readShort();
+        int editorHeight = file.readShort();
+        ho.setWidth(editorWidth);
+        ho.setHeight(editorHeight);
+		mDebugLoggingEnabled = file.readShort() != 0;
+		if(mDebugLoggingEnabled){
+		Log.Log("object is : " + editorWidth + "x" + editorHeight + " big" );
+		Log.Log("debug logging is : " + mDebugLoggingEnabled);
+		}
+		
 		if(MMFRuntime.deviceApi > 22) {
 			permissionsApi23 = new HashMap<String, String>();
 			permissionsApi23.put(Manifest.permission.READ_EXTERNAL_STORAGE, "Read Storage");
 			if(!MMFRuntime.inst.verifyOkPermissionsApi23(permissionsApi23)){
-				//MMFRuntime.inst.pushForPermissions(permissionsApi23, PERMISSIONS_PICA_REQUEST);
 			}
 			else{
 				enabled_perms = true;
@@ -98,11 +108,12 @@ public class CRunPDFViewer extends CRunExtension
       		drawX -= rh.rhWindowX;
 			drawY -= rh.rhWindowY;
 
-			mImage.setResampling(ho.bAntialias);
+			//mImage.setResampling(ho.bAntialias);
+			if(mDebugLoggingEnabled){
 			Log.Log("image is : " + mImage.getWidth() + ";" + mImage.getHeight() );
 			Log.Log("render image at : " + drawX + ";" + drawY );
+			}
 			GLRenderer.inst.renderImage(mImage, drawX, drawY, -1, -1, 0, 0);
-    		//GLRenderer.inst.renderImage(image, drawX, drawY, image.getWidth(), image.getHeight(), 0, 0);
     	}
     }
     
@@ -114,7 +125,7 @@ public class CRunPDFViewer extends CRunExtension
 
     }
     
-    @Override
+    /*@Override
     public void getZoneInfos()
     {
     	if (pdfloaded)
@@ -130,7 +141,7 @@ public class CRunPDFViewer extends CRunExtension
     		ho.hoImgWidth = 1;
     		ho.hoImgHeight = 1;
     	}
-    }
+    }*/
     
     @Override
     public boolean condition (int num, CCndExtension cnd)
@@ -156,13 +167,15 @@ public class CRunPDFViewer extends CRunExtension
 					String fileName = act.getParamFilename(rh, 0);
 					mFilename = fileName;
 					
-						mLastError = "Loading file...";
+						if(mDebugLoggingEnabled){
 						Log.Log("Loading file: " + mFilename);
+						}
 						openRenderer(mFilename);
 						if(pdfloaded)
 						{
-							mLastError = "File loaded.";
+							if(mDebugLoggingEnabled){
 							Log.Log("File loaded." + mFilename);
+							}
 							mCurrentImageNumber = 0;
 							renderPage(0);
 						}
@@ -180,7 +193,9 @@ public class CRunPDFViewer extends CRunExtension
 				case 2:
 				{
 					int nimage = act.getParamExpression (rh, 0);
-					
+					if(mDebugLoggingEnabled){
+					Log.Log("Set current page to " + nimage);
+					}
 					if (nimage >= 0 && mPdfRenderer!=null)
 					{
 						mCurrentImageNumber = nimage;
@@ -196,7 +211,9 @@ public class CRunPDFViewer extends CRunExtension
 			};
 		} 
 		catch (Exception e) {
+			if(mDebugLoggingEnabled){
 			Log.Log("exception caught by action:" + e.toString());
+			}
 			mLastError = e.toString();
 		}    	
     }
@@ -225,7 +242,7 @@ public class CRunPDFViewer extends CRunExtension
 			}
 			case 2:
 			{
-	    		expRet.forceInt(mCurrentImageNumber+1);
+	    		expRet.forceInt(mCurrentImageNumber);
 	    		return expRet;
 			}
 			
@@ -241,7 +258,9 @@ public class CRunPDFViewer extends CRunExtension
 		{
 			pdfloaded = false;
 			File file = new File(filename);
+			if(mDebugLoggingEnabled){
 			Log.Log("open pdf.");
+			}
 			mFileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
 			// This is the PdfRenderer we use to render the PDF.
 			if (mFileDescriptor != null) {
@@ -272,14 +291,25 @@ public class CRunPDFViewer extends CRunExtension
         }
         
 		// Use `openPage` to open a specific page in PDF.
+		if(mDebugLoggingEnabled){
 		Log.Log("opening pdf page...");
+		}
 		mCurrentPage = mPdfRenderer.openPage(index);
 		// Important: the destination bitmap must be ARGB (not RGB).
+		if(mDebugLoggingEnabled){
 		Log.Log("creating bitmap...");
-		Bitmap bitmap = Bitmap.createBitmap(mCurrentPage.getWidth(), mCurrentPage.getHeight(),Bitmap.Config.ARGB_8888);
+		}
+		
+		int pageWidth = mCurrentPage.getWidth();
+        int pageHeight = mCurrentPage.getHeight();
+        float scale = Math.min((float) ho.hoImgWidth / pageWidth, (float) ho.hoImgHeight / pageHeight);
+        Bitmap bitmap = Bitmap.createBitmap((int) (pageWidth * scale), (int) (pageHeight * scale), Bitmap.Config.ARGB_8888);
+		//Bitmap bitmap = Bitmap.createBitmap(mCurrentPage.getWidth(), mCurrentPage.getHeight(),Bitmap.Config.ARGB_8888);
 		// Here, we render the page onto a Bitmap.
 		// To render a portion of the page, use the second and third parameter. Pass nulls to get the default result.
+		if(mDebugLoggingEnabled){
 		Log.Log("redering pdf page...");
+		}
 		mCurrentPage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
 		// Create image
 		if(bitmap != null)
@@ -300,7 +330,9 @@ public class CRunPDFViewer extends CRunExtension
 		else
 		{
 			mLastError = "Page cannot be rendered, bitmap is null";
+			if(mDebugLoggingEnabled){
 			Log.Log("Page cannot be rendered, bitmap is null");
+			}
 		}
     }
 
